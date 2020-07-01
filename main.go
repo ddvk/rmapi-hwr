@@ -65,7 +65,7 @@ func sendApi(key, hmackey string, data []byte, outputtype string) ([]byte, error
 	return body, nil
 }
 
-func getJson(filename, contenttype string) (r []byte, err error) {
+func getJson(filename, contenttype string, lang string, pageNumber int) (r []byte, err error) {
 	zip := archive.NewZip()
 	file, err := os.Open(filename)
 	if err != nil {
@@ -79,9 +79,21 @@ func getJson(filename, contenttype string) (r []byte, err error) {
 	if err != nil {
 		return
 	}
-	if len(zip.Pages) == 0 {
+	numPages := len(zip.Pages)
+	if numPages == 0 {
 		err = errors.New("no pages")
 		return
+	}
+	if pageNumber > numPages {
+		err = errors.New(fmt.Sprintf("max pages %d", numPages))
+		return
+	}
+	if pageNumber == 0 {
+		pageNumber = zip.Content.LastOpenedPage
+	} else if pageNumber < 0 {
+		pageNumber = 0
+	} else {
+		pageNumber -= 1
 	}
 
 	switch strings.ToLower(contenttype) {
@@ -91,13 +103,15 @@ func getJson(filename, contenttype string) (r []byte, err error) {
 		contenttype = "Text"
 	case "diagram":
 		contenttype = "Diagram"
+	case "raw":
+		contenttype = "Raw Content"
+
 	default:
 		log.Fatal("unsupported content type: " + contenttype)
 	}
-	page := zip.Pages[0]
 	batch := models.BatchInput{
 		Configuration: &models.Configuration{
-			Lang: "en_US",
+			Lang: lang,
 		},
 		StrokeGroups: []*models.StrokeGroup{
 			&models.StrokeGroup{},
@@ -111,6 +125,7 @@ func getJson(filename, contenttype string) (r []byte, err error) {
 
 	sg := batch.StrokeGroups[0]
 
+	page := zip.Pages[pageNumber]
 	for _, layer := range page.Data.Layers {
 		for _, line := range layer.Lines {
 			stroke := models.Stroke{
@@ -146,8 +161,10 @@ func main() {
 	}
 
 	filename := ""
-	var textType = flag.String("type", "Text", "type of the content: Text, Math,Diagram")
+	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram, raw")
 	var outputType = flag.String("output", "text", "output: svg, text, latex")
+	var lang = flag.String("lang", "en_US", "language culture")
+	var page = flag.Int("page", 0, "page to convert")
 	flag.Parse()
 
 	args := flag.Args()
@@ -155,7 +172,7 @@ func main() {
 		log.Fatal("no file specified")
 	}
 	filename = args[0]
-	js, err := getJson(filename, *textType)
+	js, err := getJson(filename, *textType, *lang, *page)
 	if err != nil {
 		log.Fatal(err)
 	}

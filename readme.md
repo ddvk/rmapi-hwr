@@ -16,3 +16,11 @@
 - run with `go run main.go the.zip`
 
 
+
+## Status
+- only a single page is being converted
+
+## TODO
+- [ ] convert all pages
+
+
