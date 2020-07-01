@@ -83,6 +83,17 @@ func getJson(filename, contenttype string) (r []byte, err error) {
 		err = errors.New("no pages")
 		return
 	}
+
+	switch strings.ToLower(contenttype) {
+	case "math":
+		contenttype = "Math"
+	case "text":
+		contenttype = "Text"
+	case "diagram":
+		contenttype = "Diagram"
+	default:
+		log.Fatal("unsupported content type: " + contenttype)
+	}
 	page := zip.Pages[0]
 	batch := models.BatchInput{
 		Configuration: &models.Configuration{
