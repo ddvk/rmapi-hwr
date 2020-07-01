@@ -20,7 +20,7 @@ import (
 
 const url = "https://cloud.myscript.com/api/v4.0/iink/batch"
 
-func sendApi(key, hmackey string, data []byte, outputtype string) ([]byte, error) {
+func sendApi(key, hmackey string, data []byte, mimeType string) ([]byte, error) {
 	fullkey := key + hmackey
 	mac := hmac.New(sha512.New, []byte(fullkey))
 	mac.Write(data)
@@ -28,21 +28,7 @@ func sendApi(key, hmackey string, data []byte, outputtype string) ([]byte, error
 
 	client := http.Client{}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
-	output := ""
-
-	switch strings.ToLower(outputtype) {
-
-	case "text":
-		output = "text/plain"
-	case "svg":
-		output = "image/svg+xml"
-	case "latex":
-		output = "application/x-latex"
-	default:
-		log.Fatal("unsupported output type: " + outputtype)
-
-	}
-	req.Header.Set("Accept", output+", application/json")
+	req.Header.Set("Accept", mimeType+", application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("applicationKey", key)
 	req.Header.Set("hmac", result)
@@ -96,19 +82,6 @@ func getJson(filename, contenttype string, lang string, pageNumber int) (r []byt
 		pageNumber -= 1
 	}
 
-	switch strings.ToLower(contenttype) {
-	case "math":
-		contenttype = "Math"
-	case "text":
-		contenttype = "Text"
-	case "diagram":
-		contenttype = "Diagram"
-	case "raw":
-		contenttype = "Raw Content"
-
-	default:
-		log.Fatal("unsupported content type: " + contenttype)
-	}
 	batch := models.BatchInput{
 		Configuration: &models.Configuration{
 			Lang: lang,
@@ -161,8 +134,7 @@ func main() {
 	}
 
 	filename := ""
-	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram, raw")
-	var outputType = flag.String("output", "text", "output: svg, text, latex")
+	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram")
 	var lang = flag.String("lang", "en_US", "language culture")
 	var page = flag.Int("page", 0, "page to convert")
 	flag.Parse()
@@ -172,12 +144,30 @@ func main() {
 		log.Fatal("no file specified")
 	}
 	filename = args[0]
-	js, err := getJson(filename, *textType, *lang, *page)
+
+	var contenttype = ""
+	var output = ""
+
+	switch strings.ToLower(*textType) {
+	case "math":
+		contenttype = "Math"
+		output = "application/x-latex"
+	case "text":
+		contenttype = "Text"
+		output = "text/plain"
+	case "diagram":
+		contenttype = "Diagram"
+		output = "image/svg+xml"
+	default:
+		log.Fatal("unsupported content type: " + contenttype)
+	}
+
+	js, err := getJson(filename, contenttype, *lang, *page)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	body, err := sendApi(applicationKey, hmacKey, js, *outputType)
+	body, err := sendApi(applicationKey, hmacKey, js, output)
 	if err != nil {
 		log.Fatal(err)
 	}
