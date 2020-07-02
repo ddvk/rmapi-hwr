@@ -143,9 +143,19 @@ func main() {
 	}
 
 	filename := ""
+	flag.Usage = func() {
+		exec := os.Args[0]
+		output := flag.CommandLine.Output()
+		fmt.Fprintf(output, "Usage of %s:\n", exec)
+		fmt.Fprintf(output, "%s [options] somefile.zip\n", exec)
+		fmt.Fprintln(output, "where somefile.zip is what you got with rmapi get")
+		fmt.Fprintln(output, "Outputs: Text->text, Math->LaTex, Diagram->svg")
+		fmt.Fprintln(output, "Options:")
+		flag.PrintDefaults()
+	}
 	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram")
 	var lang = flag.String("lang", "en_US", "language culture")
-	var page = flag.Int("page", 0, "page to convert")
+	var page = flag.Int("page", 0, "page to convert (default lastopened)")
 	flag.Parse()
 
 	args := flag.Args()
