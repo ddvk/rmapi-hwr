@@ -21,7 +21,16 @@ import (
 
 const url = "https://cloud.myscript.com/api/v4.0/iink/batch"
 
-func sendApi(key, hmackey string, data []byte, mimeType string) ([]byte, error) {
+type config struct {
+	page           int
+	applicationKey string
+	hmacKey        string
+	lang           string
+	inputType      string
+	outputType     string
+}
+
+func sendRequest(key, hmackey string, data []byte, mimeType string) (body []byte, err error) {
 	fullkey := key + hmackey
 	mac := hmac.New(sha512.New, []byte(fullkey))
 	mac.Write(data)
@@ -37,23 +46,23 @@ func sendApi(key, hmackey string, data []byte, mimeType string) ([]byte, error) 
 	res, err := client.Do(req)
 
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
-	body, err := ioutil.ReadAll(res.Body)
+	body, err = ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
+
 	if res.StatusCode != http.StatusOK {
-		strBody := string(body)
-		log.Print(strBody)
-		return nil, errors.New("not OK")
+		err = fmt.Errorf("Not ok, Status: %d", res.StatusCode)
+		return
 	}
 
 	return body, nil
 }
 
-func getJson(filename, contenttype string, lang string, pageNumber int) (r []byte, err error) {
-	zip := archive.NewZip()
+func loadRmZip(filename string) (zip *archive.Zip, err error) {
+	zip = archive.NewZip()
 	file, err := os.Open(filename)
 	if err != nil {
 		return
@@ -67,20 +76,22 @@ func getJson(filename, contenttype string, lang string, pageNumber int) (r []byt
 		return
 	}
 	numPages := len(zip.Pages)
+
 	if numPages == 0 {
 		err = errors.New("no pages")
 		return
 	}
-	if pageNumber > numPages {
-		err = errors.New(fmt.Sprintf("max pages %d", numPages))
+	return zip, nil
+}
+
+var noContent = errors.New("no page content")
+
+func getJson(zip *archive.Zip, contenttype string, lang string, pageNumber int) (r []byte, err error) {
+	numPages := len(zip.Pages)
+
+	if pageNumber >= numPages || pageNumber < 0 {
+		err = fmt.Errorf("page %d outside range, max: %d", numPages)
 		return
-	}
-	if pageNumber == 0 {
-		pageNumber = zip.Content.LastOpenedPage
-	} else if pageNumber < 0 {
-		pageNumber = 0
-	} else {
-		pageNumber -= 1
 	}
 
 	batch := models.BatchInput{
@@ -100,6 +111,11 @@ func getJson(filename, contenttype string, lang string, pageNumber int) (r []byt
 	sg := batch.StrokeGroups[0]
 
 	page := zip.Pages[pageNumber]
+
+	if page.Data == nil {
+		return nil, noContent
+	}
+
 	for _, layer := range page.Data.Layers {
 		for _, line := range layer.Lines {
 			pointerType := ""
@@ -142,32 +158,62 @@ func main() {
 		log.Fatal("provide the myScript hmac in: RMAPI_HWR_HMAC")
 	}
 
-	filename := ""
 	flag.Usage = func() {
 		exec := os.Args[0]
 		output := flag.CommandLine.Output()
-		fmt.Fprintf(output, "Usage of %s:\n", exec)
-		fmt.Fprintf(output, "%s [options] somefile.zip\n", exec)
-		fmt.Fprintln(output, "where somefile.zip is what you got with rmapi get")
-		fmt.Fprintln(output, "Outputs: Text->text, Math->LaTex, Diagram->svg")
+		fmt.Fprintf(output, "Usage: %s [options] somefile.zip\n", exec)
+		fmt.Fprintln(output, "\twhere somefile.zip is what you got with rmapi get")
+		fmt.Fprintln(output, "\tOutputs: Text->text, Math->LaTex, Diagram->svg")
 		fmt.Fprintln(output, "Options:")
 		flag.PrintDefaults()
 	}
 	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram")
 	var lang = flag.String("lang", "en_US", "language culture")
 	var page = flag.Int("page", 0, "page to convert (default lastopened)")
+	// var outputFile = flag.String("o", "-", "output default stdout, wip")
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) < 1 {
 		log.Fatal("no file specified")
 	}
-	filename = args[0]
 
-	var contenttype = ""
-	var output = ""
+	filename := args[0]
+	zip, err := loadRmZip(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	switch strings.ToLower(*textType) {
+	pageNumber := *page
+
+	if pageNumber == 0 {
+		pageNumber = zip.Content.LastOpenedPage
+	} else if pageNumber < 0 {
+		pageNumber = 0
+	} else {
+		pageNumber -= 1
+	}
+
+	contenttype, output := setContentType(*textType)
+
+	js, err := getJson(zip, contenttype, *lang, pageNumber)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	body, err := sendRequest(applicationKey, hmacKey, js, output)
+	if err != nil {
+		if body != nil {
+			log.Println(string(body))
+		}
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(body))
+}
+
+func setContentType(requested string) (contenttype string, output string) {
+	switch strings.ToLower(requested) {
 	case "math":
 		contenttype = "Math"
 		output = "application/x-latex"
@@ -180,16 +226,5 @@ func main() {
 	default:
 		log.Fatal("unsupported content type: " + contenttype)
 	}
-
-	js, err := getJson(filename, contenttype, *lang, *page)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	body, err := sendApi(applicationKey, hmacKey, js, output)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(string(body))
+	return
 }
