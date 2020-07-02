@@ -15,7 +15,7 @@
 - get the zip of a notebook or pdf with `rmapi get`
 - run with `go run main.go the.zip`
 - or build `go build`
-- '-h' for supported options
+- '`h` for supported options
 
 
 
