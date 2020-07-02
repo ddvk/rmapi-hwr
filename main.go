@@ -64,6 +64,8 @@ func sendRequest(key, hmackey string, data []byte, mimeType string) (body []byte
 func loadRmZip(filename string) (zip *archive.Zip, err error) {
 	zip = archive.NewZip()
 	file, err := os.Open(filename)
+	defer file.Close()
+
 	if err != nil {
 		return
 	}
@@ -169,6 +171,7 @@ func main() {
 	}
 	var textType = flag.String("type", "Text", "type of the content: Text, Math, Diagram")
 	var lang = flag.String("lang", "en_US", "language culture")
+	//todo: page range, all pages etc
 	var page = flag.Int("page", 0, "page to convert (default lastopened)")
 	// var outputFile = flag.String("o", "-", "output default stdout, wip")
 	flag.Parse()
@@ -196,6 +199,7 @@ func main() {
 
 	contenttype, output := setContentType(*textType)
 
+	//loop over all pages, some scatter-gather
 	js, err := getJson(zip, contenttype, *lang, pageNumber)
 	if err != nil {
 		log.Fatal(err)
@@ -209,6 +213,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	//todo: file output
 	fmt.Println(string(body))
 }
 
