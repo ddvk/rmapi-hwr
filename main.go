@@ -16,6 +16,7 @@ import (
 
 	"github.com/ddvk/rmapi-hwr/models"
 	"github.com/juruen/rmapi/archive"
+	"github.com/juruen/rmapi/encoding/rm"
 )
 
 const url = "https://cloud.myscript.com/api/v4.0/iink/batch"
@@ -101,9 +102,17 @@ func getJson(filename, contenttype string, lang string, pageNumber int) (r []byt
 	page := zip.Pages[pageNumber]
 	for _, layer := range page.Data.Layers {
 		for _, line := range layer.Lines {
+			pointerType := ""
+			if line.BrushType == rm.EraseArea {
+				continue
+			}
+			if line.BrushType == rm.Eraser {
+				pointerType = "ERASER"
+			}
 			stroke := models.Stroke{
-				X: make([]float32, 0),
-				Y: make([]float32, 0),
+				X:           make([]float32, 0),
+				Y:           make([]float32, 0),
+				PointerType: pointerType,
 			}
 			sg.Strokes = append(sg.Strokes, &stroke)
 
