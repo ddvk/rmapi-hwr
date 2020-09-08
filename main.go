@@ -1,25 +1,18 @@
 package main
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha512"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 
+	"github.com/ddvk/rmapi-hwr/client"
 	"github.com/ddvk/rmapi-hwr/models"
 	"github.com/juruen/rmapi/archive"
 	"github.com/juruen/rmapi/encoding/rm"
 )
-
-const url = "https://cloud.myscript.com/api/v4.0/iink/batch"
 
 type config struct {
 	page           int
@@ -28,37 +21,6 @@ type config struct {
 	lang           string
 	inputType      string
 	outputType     string
-}
-
-func sendRequest(key, hmackey string, data []byte, mimeType string) (body []byte, err error) {
-	fullkey := key + hmackey
-	mac := hmac.New(sha512.New, []byte(fullkey))
-	mac.Write(data)
-	result := hex.EncodeToString(mac.Sum(nil))
-
-	client := http.Client{}
-	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
-	req.Header.Set("Accept", mimeType+", application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("applicationKey", key)
-	req.Header.Set("hmac", result)
-
-	res, err := client.Do(req)
-
-	if err != nil {
-		return
-	}
-	body, err = ioutil.ReadAll(res.Body)
-	if err != nil {
-		return
-	}
-
-	if res.StatusCode != http.StatusOK {
-		err = fmt.Errorf("Not ok, Status: %d", res.StatusCode)
-		return
-	}
-
-	return body, nil
 }
 
 func loadRmZip(filename string) (zip *archive.Zip, err error) {
@@ -205,7 +167,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	body, err := sendRequest(applicationKey, hmacKey, js, output)
+	body, err := client.SendRequest(applicationKey, hmacKey, js, output)
 	if err != nil {
 		if body != nil {
 			log.Println(string(body))
@@ -228,6 +190,9 @@ func setContentType(requested string) (contenttype string, output string) {
 	case "diagram":
 		contenttype = "Diagram"
 		output = "image/svg+xml"
+	case "jiix":
+		contenttype = "Text"
+		output = "application/vnd.myscript.jiix"
 	default:
 		log.Fatal("unsupported content type: " + contenttype)
 	}
