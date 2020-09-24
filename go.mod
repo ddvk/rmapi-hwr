@@ -8,4 +8,5 @@ require (
 	github.com/go-openapi/swag v0.19.9
 	github.com/go-openapi/validate v0.19.10
 	github.com/juruen/rmapi v0.0.12
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 )
