@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
+	"strings"
 
 	"github.com/ddvk/rmapi-hwr/hwr"
 	"github.com/juruen/rmapi/archive"
@@ -51,7 +53,7 @@ func main() {
 	var lang = flag.String("lang", "en_US", "language culture")
 	//todo: page range, all pages etc
 	var page = flag.Int("page", -1, "page to convert (default all)")
-	var outputFile = flag.String("o", "-", "output default stdout, wip")
+	//var outputFile = flag.String("o", "-", "output default stdout, wip")
 	flag.Parse()
 
 	args := flag.Args()
@@ -65,11 +67,13 @@ func main() {
 		log.Fatal(err)
 	}
 
+	output := strings.TrimSuffix(filename, path.Ext(filename))
+
 	cfg := hwr.Config{
 		Page:       *page,
 		Lang:       *lang,
 		InputType:  *inputType,
-		OutputFile: *outputFile,
+		OutputFile: output,
 	}
 
 	hwr.Hwr(zip, cfg)

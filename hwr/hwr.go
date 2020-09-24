@@ -153,7 +153,7 @@ func Hwr(zip *archive.Zip, cfg Config) {
 		dump(result)
 	} else {
 		//text file
-		f, err := os.Create(cfg.OutputFile)
+		f, err := os.Create(cfg.OutputFile + ".txt")
 		if err != nil {
 			dump(result)
 			log.Fatal(err)
