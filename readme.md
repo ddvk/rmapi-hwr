@@ -22,7 +22,5 @@
 ## Status
 - only a single page is being converted
 
-## TODO
-- [ ] convert all pages
 
 
