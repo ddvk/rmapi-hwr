@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -11,7 +12,29 @@ import (
 
 	"github.com/ddvk/rmapi-hwr/hwr"
 	"github.com/juruen/rmapi/archive"
+	"github.com/juruen/rmapi/encoding/rm"
 )
+
+func loadRmPage(filename string) (zip *archive.Zip, err error) {
+	zip = archive.NewZip()
+	file, err := os.Open(filename)
+	defer file.Close()
+
+	pageData, err := ioutil.ReadAll(file)
+
+	if err != nil {
+		log.Fatal("cant read fil")
+		return
+	}
+	page := archive.Page{}
+	page.Data = rm.New()
+	page.Data.UnmarshalBinary(pageData)
+
+	zip.Pages = append(zip.Pages, page)
+
+	return zip, nil
+
+}
 
 func loadRmZip(filename string) (zip *archive.Zip, err error) {
 	zip = archive.NewZip()
@@ -62,13 +85,8 @@ func main() {
 	}
 
 	filename := args[0]
-	zip, err := loadRmZip(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	output := strings.TrimSuffix(filename, path.Ext(filename))
-
+	ext := path.Ext(filename)
+	output := strings.TrimSuffix(filename, ext)
 	cfg := hwr.Config{
 		Page:       *page,
 		Lang:       *lang,
@@ -76,6 +94,21 @@ func main() {
 		OutputFile: output,
 	}
 
-	hwr.Hwr(zip, cfg)
+	var err error
+	var z *archive.Zip
 
+	switch ext {
+	case ".zip":
+		z, err = loadRmZip(filename)
+	case ".rm":
+		z, err = loadRmPage(filename)
+	default:
+		log.Fatal("Unsupported file")
+
+	}
+	if err != nil {
+		log.Fatalln("Can't read file ", filename)
+
+	}
+	hwr.Hwr(z, cfg)
 }
