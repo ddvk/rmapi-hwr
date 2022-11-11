@@ -26,13 +26,15 @@ type Config struct {
 	InputType      string
 	OutputType     string
 	OutputFile     string
+	AddPages       bool
+	BatchSize      int64
 }
 
 func getJson(zip *archive.Zip, contenttype string, lang string, pageNumber int) (r []byte, err error) {
 	numPages := len(zip.Pages)
 
 	if pageNumber >= numPages || pageNumber < 0 {
-		err = fmt.Errorf("page %d outside range, max: %d", numPages)
+		err = fmt.Errorf("page %d outside range, max: %d", pageNumber, numPages)
 		return
 	}
 
@@ -118,10 +120,10 @@ func Hwr(zip *archive.Zip, cfg Config) {
 
 	contenttype, output := setContentType(cfg.InputType)
 
-	var batchSize int64 = 3
 	ctx := context.TODO()
-	sem := semaphore.NewWeighted(batchSize)
+	sem := semaphore.NewWeighted(cfg.BatchSize)
 	for p := start; p <= end; p++ {
+		log.Println("Page: ", p)
 		if err := sem.Acquire(ctx, 1); err != nil {
 			log.Printf("Failed to acquire semaphore: %v", err)
 			break
@@ -130,8 +132,9 @@ func Hwr(zip *archive.Zip, cfg Config) {
 			defer sem.Release(1)
 			js, err := getJson(zip, contenttype, cfg.Lang, p)
 			if err != nil {
-				log.Fatal("Can't get page: %d %v", p, err)
+				log.Fatalf("Can't get page: %d %v\n", p, err)
 			}
+			log.Println("sending request: ", p)
 
 			body, err := client.SendRequest(applicationKey, hmacKey, js, output)
 			if err != nil {
@@ -141,21 +144,21 @@ func Hwr(zip *archive.Zip, cfg Config) {
 				log.Fatal(err)
 			}
 			result[p] = body
-			log.Println("got page ", p)
+			log.Println("converted page ", p)
 		}(p)
 	}
-	log.Println("wating to finish")
-	if err := sem.Acquire(ctx, batchSize); err != nil {
+	log.Println("wating for all to finish")
+	if err := sem.Acquire(ctx, cfg.BatchSize); err != nil {
 		log.Printf("Failed to acquire semaphore: %v", err)
 	}
 
 	if cfg.OutputFile == "-" {
-		dump(result)
+		dump(result, cfg.AddPages)
 	} else {
 		//text file
 		f, err := os.Create(cfg.OutputFile + ".txt")
 		if err != nil {
-			dump(result)
+			dump(result, cfg.AddPages)
 			log.Fatal(err)
 		}
 
@@ -167,8 +170,12 @@ func Hwr(zip *archive.Zip, cfg Config) {
 	}
 }
 
-func dump(result [][]byte) {
-	for _, c := range result {
+func dump(result [][]byte, addPages bool) {
+	for p, c := range result {
+		if addPages {
+			fmt.Printf("=== Page %d ===\n", p)
+
+		}
 		fmt.Println(string(c))
 	}
 }

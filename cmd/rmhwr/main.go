@@ -18,6 +18,9 @@ import (
 func loadRmPage(filename string) (zip *archive.Zip, err error) {
 	zip = archive.NewZip()
 	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
 	defer file.Close()
 
 	pageData, err := ioutil.ReadAll(file)
@@ -28,7 +31,10 @@ func loadRmPage(filename string) (zip *archive.Zip, err error) {
 	}
 	page := archive.Page{}
 	page.Data = rm.New()
-	page.Data.UnmarshalBinary(pageData)
+	err = page.Data.UnmarshalBinary(pageData)
+	if err != nil {
+		return nil, err
+	}
 
 	zip.Pages = append(zip.Pages, page)
 
@@ -39,11 +45,13 @@ func loadRmPage(filename string) (zip *archive.Zip, err error) {
 func loadRmZip(filename string) (zip *archive.Zip, err error) {
 	zip = archive.NewZip()
 	file, err := os.Open(filename)
-	defer file.Close()
 
 	if err != nil {
 		return
 	}
+
+	defer file.Close()
+
 	fi, err := file.Stat()
 	if err != nil {
 		return
@@ -77,6 +85,14 @@ func main() {
 	//todo: page range, all pages etc
 	var page = flag.Int("page", -1, "page to convert (default all)")
 	//var outputFile = flag.String("o", "-", "output default stdout, wip")
+	var addPages = flag.Bool("a", false, "add page headers")
+	cfg := hwr.Config{
+		Page:      *page,
+		Lang:      *lang,
+		InputType: *inputType,
+		AddPages:  *addPages,
+		BatchSize: *flag.Int64("b", 3, "batch size"),
+	}
 	flag.Parse()
 
 	args := flag.Args()
@@ -86,13 +102,7 @@ func main() {
 
 	filename := args[0]
 	ext := path.Ext(filename)
-	output := strings.TrimSuffix(filename, ext)
-	cfg := hwr.Config{
-		Page:       *page,
-		Lang:       *lang,
-		InputType:  *inputType,
-		OutputFile: output,
-	}
+	cfg.OutputFile = strings.TrimSuffix(filename, ext)
 
 	var err error
 	var z *archive.Zip
@@ -107,7 +117,7 @@ func main() {
 
 	}
 	if err != nil {
-		log.Fatalln("Can't read file ", filename)
+		log.Fatalln(err, "Can't read file ", filename)
 
 	}
 	hwr.Hwr(z, cfg)
